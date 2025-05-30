@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Navan's HPDC Calculator Chatbot</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: 30px auto; }
+  #chatbox { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; background: #f9f9f9; }
+  .message { margin: 8px 0; }
+  .bot { color: #004d99; }
+  .user { text-align: right; color: #444; }
+  #inputArea { margin-top: 10px; display: flex; }
+  #userInput { flex: 1; padding: 8px; font-size: 1rem; }
+  button { padding: 8px 12px; margin-left: 8px; font-size: 1rem; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>Navan's HPDC Calculator Chatbot</h1>
+
+<div id="chatbox"></div>
+
+<div id="inputArea">
+  <input type="text" id="userInput" placeholder="Type here..." autocomplete="off" />
+  <button id="sendBtn">Send</button>
+  <button id="downloadBtn">Download PDF</button>
+</div>
+
+<!-- jsPDF library from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+(() => {
+  const { jsPDF } = window.jspdf;
+
+  const chatbox = document.getElementById('chatbox');
+  const userInput = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  // State and data storage
+  let state = 'menu';
+  const data = {};
+
+  function appendMessage(sender, text) {
+    const div = document.createElement('div');
+    div.classList.add('message');
+    div.classList.add(sender === 'Navan\'s' ? 'bot' : 'user');
+    div.innerHTML = text.replace(/\n/g, '<br>');
+    chatbox.appendChild(div);
+    chatbox.scrollTop = chatbox.scrollHeight;
+  }
+
+  // Utility for input with reuse check
+  function getInput(key, prompt, nextState) {
+    if (data[key] !== undefined) {
+      state = nextState;
+      handleInput(''); // proceed automatically with existing data
+      return false;
+    }
+    appendMessage("Navan's", prompt);
+    state = nextState;
+    return true;
+  }
+
+  // Main input handler state machine
+  function handleInput(inputRaw) {
+    const input = inputRaw.trim();
+
+    switch(state) {
+
+      case 'menu':
+        if (input === '') {
+          appendMessage("Navan's", "Please type a calculation name or number from the list:\n" +
+            "1. Shot Volume\n2. First Stroke Length\n3. Fill Ratio\n4. Gate Area\n5. Gate Velocity\n6. Casting Pressure\n7. Fill Time\n8. Total Projected Area\n9. Clamping Force Required\n10. Machine Tonnage");
+          return;
+        }
+
+        switch(input.toLowerCase()) {
+          case '1':
+          case 'shot volume':
+            startShotVolume();
+            break;
+          case '2':
+          case 'first stroke length':
+            startFirstStrokeLength();
+            break;
+          case '3':
+          case 'fill ratio':
+            startFillRatio();
+            break;
+          case '4':
+          case 'gate area':
+            startGateArea();
+            break;
+          case '5':
+          case 'gate velocity':
+            startGateVelocity();
+            break;
+          case '6':
+          case 'casting pressure':
+            startCastingPressure();
+            break;
+          case '7':
+          case 'fill time':
+            startFillTime();
+            break;
+          case '8':
+          case 'total projected area':
+            startTotalProjectedArea();
+            break;
+          case '9':
+          case 'clamping force required':
+            startClampingForce();
+            break;
+          case '10':
+          case 'machine tonnage':
+            startMachineTonnage();
+            break;
+          default:
+            appendMessage("Navan's", "Sorry, I didn't understand that. Please type a valid calculation name or number.");
+        }
+        break;
+
+      // Shot Volume
+      case 'svMassShot':
+        if (input === '' && data.massShot !== undefined) {
+          computeShotVolume();
+          break;
+        }
+        const massShot = parseFloat(input);
+        if (isNaN(massShot) || massShot <= 0) {
+          appendMessage("Navan's", "Please enter a valid positive mass of shot in grams.");
+          break;
+        }
+        data.massShot = massShot;
+        computeShotVolume();
+        break;
+
+      // First Stroke Length inputs
+      case 'fslOrigin':
+        if (input === '' && data.origin !== undefined) {
+          proceedFirstStrokeL1();
+          break;
+        }
+        const origin = parseFloat(input);
+        if (isNaN(origin) || origin <= 0) {
+          appendMessage("Navan's", "Please enter a valid origin length in mm.");
+          break;
+        }
+        data.origin = origin;
+        proceedFirstStrokeL1();
+        break;
+
+      case 'fslBiscuitThickness':
+        if (input === '' && data.biscuitThickness !== undefined) {
+          proceedFirstStrokeCalculate();
+          break;
+        }
+        const biscuitThickness = parseFloat(input);
+        if (isNaN(biscuitThickness) || biscuitThickness < 0) {
+          appendMessage("Navan's", "Please enter a valid biscuit thickness in cm (0 or positive).");
+          break;
+        }
+        data.biscuitThickness = biscuitThickness;
+        proceedFirstStrokeCalculate();
+        break;
+
+      case 'fslCastingWeight':
+        if (input === '' && data.castingWeight !== undefined) {
+          proceedFirstStrokePlungerDia();
+          break;
+        }
+        const castingWeight = parseFloat(input);
+        if (isNaN(castingWeight) || castingWeight <= 0) {
+          appendMessage("Navan's", "Please enter a valid casting weight in grams.");
+          break;
+        }
+        data.castingWeight = castingWeight;
+        proceedFirstStrokePlungerDia();
+        break;
+
+      case 'fslOverflowWeight':
+        if (input === '' && data.overflowWeight !== undefined) {
+          proceedFirstStrokePlungerDia();
+          break;
+        }
+        const overflowWeight = parseFloat(input);
+        if (isNaN(overflowWeight) || overflowWeight < 0) {
+          appendMessage("Navan's", "Please enter a valid overflow weight in grams (0 or positive).");
+          break;
+        }
+        data.overflowWeight = overflowWeight;
+        proceedFirstStrokePlungerDia();
+        break;
+
+      case 'fslPlungerDia':
+        if (input === '' && data.plungerDia !== undefined) {
+          proceedFirstStrokeCalculate();
+          break;
+        }
+        const plungerDia = parseFloat(input);
+        if (isNaN(plungerDia) || plungerDia <= 0) {
+          appendMessage("Navan's", "Please enter a valid plunger diameter in mm.");
+          break;
+        }
+        data.plungerDia = plungerDia;
+        proceedFirstStrokeCalculate();
+        break;
+
+      // Fill Ratio inputs
+      case 'frShotWeight':
+        if (input === '' && data.shotWeight !== undefined) {
+          proceedFillRatioOriginLength();
+          break;
+        }
+        const shotWeight = parseFloat(input);
+        if (isNaN(shotWeight) || shotWeight <= 0) {
+          appendMessage("Navan's", "Please enter a valid shot weight in grams.");
+          break;
+        }
+        data.shotWeight = shotWeight;
+        proceedFillRatioOriginLength();
+        break;
+
+      case 'frOriginLength':
+        if (input === '' && data.originLength !== undefined) {
+          computeFillRatio();
+          break;
+        }
+        const originLength = parseFloat(input);
+        if (isNaN(originLength) || originLength <= 0) {
+          appendMessage("Navan's", "Please enter a valid origin length in cm.");
+          break;
+        }
+        data.originLength = originLength;
+        computeFillRatio();
+        break;
+
+      // Gate Area inputs
+      case 'gaGateLength':
+        if (input === '' && data.gateLength !== undefined) {
+          proceed('gaGateWidth');
+          break;
+        }
+        const gateLength = parseFloat(input);
+        if (isNaN(gateLength) || gateLength <= 0) {
+          appendMessage("Navan's", "Please enter a valid gate length in mm.");
+          break;
+        }
+        data.gateLength = gateLength;
+        proceed('gaGateWidth');
+        break;
+
+      case 'gaGateWidth':
+        if (input === '' && data.gateWidth !== undefined) {
+          computeGateArea();
+          break;
+        }
+        const gateWidth = parseFloat(input);
+        if (isNaN(gateWidth) || gateWidth <= 0) {
+          appendMessage("Navan's", "Please enter a valid gate width in mm.");
+          break;
+        }
+        data.gateWidth = gateWidth;
+        computeGateArea();
+        break;
+
+      // Gate Velocity inputs
+      case 'gvFastShotSpeed':
+        if (input === '' && data.fastShotSpeed !== undefined) {
+          computeGateVelocity();
+          break;
+        }
+        const fastShotSpeed = parseFloat(input);
+        if (isNaN(fastShotSpeed) || fastShotSpeed <= 0) {
+          appendMessage("Navan's", "Please enter a valid fast shot speed in m/sec.");
+          break;
+        }
+        data.fastShotSpeed = fastShotSpeed;
+        computeGateVelocity();
+        break;
+
+      // Casting Pressure inputs
+      case 'cpInjectionPressure':
+        if (input === '' && data.injectionPressure !== undefined) {
+          proceed('cpPistonDia');
+          break;
+        }
+        const injectionPressure = parseFloat(input);
+        if (isNaN(injectionPressure) || injectionPressure <= 0) {
+          appendMessage("Navan's", "Please enter a valid injection pressure in kg/cm².");
+          break;
+        }
+        data.injectionPressure = injectionPressure;
+        proceed('cpPistonDia');
+        break;
+
+      case 'cpPistonDia':
+        if (input === '' && data.pistonDia !== undefined) {
+          computeCastingPressure();
+          break;
+        }
+        const pistonDia = parseFloat(input);
+        if (isNaN(pistonDia) || pistonDia <= 0) {
+          appendMessage("Navan's", "Please enter a valid piston diameter in cm.");
+          break;
+        }
+        data.pistonDia = pistonDia;
+        computeCastingPressure();
+        break;
+
+      // Fill Time calculation (no input, uses stored data)
+      case 'ftCalculate':
+        if (
+          data.castingWeight === undefined || data.overflowWeight === undefined ||
+          data.plungerDia === undefined || data.fastShotSpeed === undefined
+        ) {
+          appendMessage("Navan's", "Please provide casting weight, overflow weight, plunger diameter, and fast shot speed first.");
+          state = 'menu';
+          break;
+        }
+        computeFillTime();
+        break;
+
+      // Total Projected Area inputs
+      case 'tpaPartArea':
+        if (input === '' && data.tpaPartArea !== undefined) {
+          proceed('tpaOverflowArea');
+          break;
+        }
+        const partArea = parseFloat(input);
+        if (isNaN(partArea) || partArea < 0) {
+          appendMessage("Navan's", "Please enter a valid part area in cm².");
+          break;
+        }
+        data.tpaPartArea = partArea;
+        proceed('tpaOverflowArea');
+        break;
+
+      case 'tpaOverflowArea':
+        if (input === '' && data.tpaOverflowArea !== undefined) {
+          proceed('tpaRunnerArea');
+          break;
+        }
+        const overflowArea = parseFloat(input);
+        if (isNaN(overflowArea) || overflowArea < 0) {
+          appendMessage("Navan's", "Please enter a valid overflow area in cm².");
+          break;
+        }
+        data.tpaOverflowArea = overflowArea;
+        proceed('tpaRunnerArea');
+        break;
+
+      case 'tpaRunnerArea':
+        if (input === '' && data.tpaRunnerArea !== undefined) {
+          computeTotalProjectedArea();
+          break;
+        }
+        const runnerArea = parseFloat(input);
+        if (isNaN(runnerArea) || runnerArea < 0) {
+          appendMessage("Navan's", "Please enter a valid runner area in cm².");
+          break;
+        }
+        data.tpaRunnerArea = runnerArea;
+        computeTotalProjectedArea();
+        break;
+
+      // Clamping Force inputs
+      case 'cfTotalProjectedArea':
+        if (input === '' && data.cfTotalProjectedArea !== undefined) {
+          proceed('cfCastingPressure');
+          break;
+        }
+        const totalProjectedArea = parseFloat(input);
+        if (isNaN(totalProjectedArea) || totalProjectedArea <= 0) {
+          appendMessage("Navan's", "Please enter a valid total projected area in cm².");
+          break;
+        }
+        data.cfTotalProjectedArea = totalProjectedArea;
+        proceed('cfCastingPressure');
+        break;
+
+      case 'cfCastingPressure':
+        if (input === '' && data.cfCastingPressure !== undefined) {
+          computeClampingForce();
+          break;
+        }
+        const castPressure = parseFloat(input);
+        if (isNaN(castPressure) || castPressure <= 0) {
+          appendMessage("Navan's", "Please enter a valid casting pressure in kg/cm².");
+          break;
+        }
+        data.cfCastingPressure = castPressure;
+        computeClampingForce();
+        break;
+
+      // Machine Tonnage input
+      case 'mtClampingForce':
+        if (input === '' && data.clampingForce !== undefined) {
+          computeMachineTonnage();
+          break;
+        }
+        const clampingForce = parseFloat(input);
+        if (isNaN(clampingForce) || clampingForce <= 0) {
+          appendMessage("Navan's", "Please enter a valid clamping force in kg.");
+          break;
+        }
+        data.clampingForce = clampingForce;
+        computeMachineTonnage();
+        break;
+
+      default:
+        appendMessage("Navan's", "Unexpected state. Returning to menu.");
+        state = 'menu';
+        handleInput('');
+    }
+  }
+
+  // Helper to change state and prompt
+  function proceed(nextState) {
+    state = nextState;
+    handleInput('');
+  }
+
+  // --- Calculations and steps ---
+
+  function startShotVolume() {
+    if (!getInput('massShot', "Enter mass of shot in grams:", 'svMassShot')) return;
+  }
+
+  function computeShotVolume() {
+    // density of aluminum = 2.67 g/cm³
+    const volumeShot = data.massShot / 2.67;
+    data.shotVolume = volumeShot.toFixed(3);
+    appendMessage("Navan's", `Shot Volume = ${data.shotVolume} cm³`);
+    state = 'menu';
+  }
+
+  function startFirstStrokeLength() {
+    if (!getInput('origin', "Enter origin length in mm:", 'fslOrigin')) return;
+  }
+
+  function proceedFirstStrokeL1() {
+    if (
+      data.castingWeight === undefined ||
+      data.overflowWeight === undefined
+    ) {
+      appendMessage("Navan's", "Please enter casting weight in grams:");
+      state = 'fslCastingWeight';
+      return;
+    }
+    proceed('fslOverflowWeight');
+  }
+
+  function proceedFirstStrokeCalculate() {
+    if (data.biscuitThickness === undefined) {
+      appendMessage("Navan's", "Enter biscuit thickness in cm:");
+      state = 'fslBiscuitThickness';
+      return;
+    }
+    // Compute first stroke length
+    const originCm = data.origin / 10; // mm to cm
+    const volumeAheadGate = (data.castingWeight + data.overflowWeight) / 2.67; // cm³
+
+    const plungerRadiusCm = (data.plungerDia / 10) / 2;
+    const plungerArea = Math.PI * plungerRadiusCm ** 2;
+
+    const L1 = volumeAheadGate / plungerArea;
+
+    // oil delay = 1 cm, electric delay = 2.5 cm
+    const firstStrokeLength = originCm - (L1 + data.biscuitThickness + 1 + 2.5);
+    data.firstStrokeLength = firstStrokeLength.toFixed(3);
+
+    appendMessage("Navan's",
+      `First Stroke Length = ${data.firstStrokeLength} cm\n(Computed using formula: Origin(cm) - [L1 + Biscuit Thickness + Oil Delay(1cm) + Electric Delay(2.5cm)])`);
+
+    state = 'menu';
+  }
+
+  function startFillRatio() {
+    if (!getInput('shotWeight', "Enter shot weight in grams:", 'frShotWeight')) return;
+  }
+
+  function proceedFillRatioOriginLength() {
+    if (!getInput('originLength', "Enter origin length in cm:", 'frOriginLength')) return;
+  }
+
+  function computeFillRatio() {
+    const numerator = data.shotWeight;
+    const denominator = Math.PI * ((data.plungerDia/10)/2) ** 2 * data.originLength * 2.67;
+
+    const fillRatio = (numerator / denominator) * 100;
+    data.fillRatio = fillRatio.toFixed(2);
+
+    appendMessage("Navan's", `Fill Ratio = ${data.fillRatio} %`);
+    state = 'menu';
+  }
+
+  function startGateArea() {
+    if (!getInput('gateLength', "Enter gate length in mm:", 'gaGateLength')) return;
+  }
+
+  function computeGateArea() {
+    // mm to cm: divide by 10; area in cm²
+    const gateLengthCm = data.gateLength / 10;
+    const gateWidthCm = data.gateWidth / 10;
+    const gateArea = gateLengthCm * gateWidthCm;
+    data.gateArea = gateArea.toFixed(3);
+    appendMessage("Navan's", `Gate Area = ${data.gateArea} cm²`);
+    state = 'menu';
+  }
+
+  function startGateVelocity() {
+    // Need plunger area, fast shot speed, and gate area
+    if (
+      data.plungerDia === undefined ||
+      data.fastShotSpeed === undefined ||
+      data.gateArea === undefined
+    ) {
+      appendMessage("Navan's", "Please ensure plunger diameter (mm), fast shot speed (m/s), and gate area (cm²) are provided.");
+
+      if (data.plungerDia === undefined) {
+        appendMessage("Navan's", "Enter plunger diameter in mm:");
+        state = 'fslPlungerDia';
+        return;
+      }
+      if (data.fastShotSpeed === undefined) {
+        appendMessage("Navan's", "Enter fast shot speed in m/s:");
+        state = 'gvFastShotSpeed';
+        return;
+      }
+      if (data.gateArea === undefined) {
+        appendMessage("Navan's", "Enter gate area (length and width):");
+        state = 'gaGateLength';
+        return;
+      }
+    } else {
+      proceed('gvFastShotSpeed');
+    }
+  }
+
+  function computeGateVelocity() {
+    const plungerRadiusCm = (data.plungerDia / 10) / 2;
+    const plungerArea = Math.PI * plungerRadiusCm ** 2; // cm²
+    const gateArea = parseFloat(data.gateArea);
+
+    const gateVelocity = (plungerArea * data.fastShotSpeed) / gateArea;
+    data.gateVelocity = gateVelocity.toFixed(3);
+    appendMessage("Navan's", `Gate Velocity = ${data.gateVelocity} cm/s`);
+    state = 'menu';
+  }
+
+  function startCastingPressure() {
+    if (!getInput('injectionPressure', "Enter injection pressure in kg/cm²:", 'cpInjectionPressure')) return;
+  }
+
+  function computeCastingPressure() {
+    const pistonArea = (Math.PI * data.pistonDia ** 2) / 4; // cm²
+    const plungerRadiusCm = (data.plungerDia / 10) / 2;
+    const plungerArea = Math.PI * plungerRadiusCm ** 2; // cm²
+
+    const castingPressure = data.injectionPressure * (pistonArea / plungerArea);
+    data.castingPressure = castingPressure.toFixed(3);
+
+    appendMessage("Navan's", `Casting Pressure = ${data.castingPressure} kg/cm²`);
+    state = 'menu';
+  }
+
+  function startFillTime() {
+    if (
+      data.castingWeight === undefined || data.overflowWeight === undefined ||
+      data.plungerDia === undefined || data.fastShotSpeed === undefined
+    ) {
+      appendMessage("Navan's", "Please provide casting weight, overflow weight, plunger diameter, and fast shot speed first.");
+      state = 'menu';
+      return;
+    }
+    computeFillTime();
+  }
+
+  function computeFillTime() {
+    const volumeAheadGate = (data.castingWeight + data.overflowWeight) / 2.67; // cm³
+
+    const plungerRadiusCm = (data.plungerDia / 10) / 2;
+    const plungerArea = Math.PI * plungerRadiusCm ** 2; // cm²
+
+    const fillTime = volumeAheadGate / (plungerArea * data.fastShotSpeed);
+    data.fillTime = fillTime.toFixed(3);
+
+    appendMessage("Navan's", `Fill Time = ${data.fillTime} seconds`);
+    state = 'menu';
+  }
+
+  function startTotalProjectedArea() {
+    if (!getInput('tpaPartArea', "Enter part area in cm²:", 'tpaPartArea')) return;
+  }
+
+  function computeTotalProjectedArea() {
+    const totalArea = data.tpaPartArea + data.tpaOverflowArea + data.tpaRunnerArea;
+    data.totalProjectedArea = totalArea.toFixed(3);
+    appendMessage("Navan's", `Total Projected Area = ${data.totalProjectedArea} cm²`);
+    state = 'menu';
+  }
+
+  function startClampingForce() {
+    if (!getInput('cfTotalProjectedArea', "Enter total projected area in cm²:", 'cfTotalProjectedArea')) return;
+  }
+
+  function computeClampingForce() {
+    const clampingForce = data.cfTotalProjectedArea * data.cfCastingPressure;
+    data.clampingForce = clampingForce.toFixed(3);
+    appendMessage("Navan's", `Clamping Force Required = ${data.clampingForce} kg`);
+    state = 'menu';
+  }
+
+  function startMachineTonnage() {
+    if (!getInput('clampingForce', "Enter clamping force in kg:", 'mtClampingForce')) return;
+  }
+
+  function computeMachineTonnage() {
+    const machineTonnage = data.clampingForce * 1.1;
+    data.machineTonnage = machineTonnage.toFixed(3);
+    appendMessage("Navan's", `Machine Tonnage Calculation = ${data.machineTonnage} kg`);
+    state = 'menu';
+  }
+
+  // Initial greeting and menu
+  appendMessage("Navan's", "Welcome to Navan's HPDC Calculator Chatbot!\nPlease type the calculation name or number:\n" +
+    "1. Shot Volume\n2. First Stroke Length\n3. Fill Ratio\n4. Gate Area\n5. Gate Velocity\n6. Casting Pressure\n7. Fill Time\n8. Total Projected Area\n9. Clamping Force Required\n10. Machine Tonnage");
+
+  // Event handlers
+  sendBtn.addEventListener('click', () => {
+    const input = userInput.value;
+    if (input.trim() === '') return;
+    appendMessage('User', input);
+    userInput.value = '';
+    handleInput(input);
+  });
+
+  userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      sendBtn.click();
+    }
+  });
+
+  // PDF download feature
+  downloadBtn.addEventListener('click', () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.text("Navan's HPDC Calculator Results", 10, 20);
+
+    doc.setFontSize(12);
+    let y = 30;
+
+    for (const [key, value] of Object.entries(data)) {
+      const label = key
+        .replace(/([A-Z])/g, ' $1')  // add spaces before capitals
+        .replace(/^./, str => str.toUpperCase()); // capitalize first letter
+      doc.text(`${label}: ${value}`, 10, y);
+      y += 10;
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+    }
+
+    doc.save("Navans_HPDC_Calculations.pdf");
+  });
+</script>
+
+</body>
+</html>
