@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Navan's HPDC Calculator Chatbot</title>
+  <title>Navan's HPDC Calculator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; }
     #chat { max-width: 600px; margin: 20px auto; background: white; padding: 10px; border-radius: 8px; height: 400px; overflow-y: auto; }
@@ -12,7 +12,8 @@
     .user { color: #333; background: #ddd; padding: 8px 12px; border-radius: 12px; display: inline-block; max-width: 80%; float: right; }
     #input-area { max-width: 600px; margin: 0 auto; display: flex; padding: 10px; }
     #userInput { flex-grow: 1; padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
-    #sendBtn { padding: 10px 20px; font-size: 16px; margin-left: 8px; cursor: pointer; border-radius: 6px; border: none; background: #007bff; color: white; }
+    #sendBtn, #downloadBtn { padding: 10px 20px; font-size: 16px; margin-left: 8px; cursor: pointer; border-radius: 6px; border: none; background: #007bff; color: white; }
+    #downloadBtn { display: none; }
   </style>
 </head>
 <body>
@@ -22,15 +23,18 @@
 <div id="input-area">
   <input type="text" id="userInput" placeholder="Type your answer..." autocomplete="off" />
   <button id="sendBtn">Send</button>
+  <button id="downloadBtn">Download PDF</button>
 </div>
 
 <script>
   const chat = document.getElementById('chat');
   const input = document.getElementById('userInput');
   const sendBtn = document.getElementById('sendBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
 
   let data = {};
   let step = 0;
+  let resultText = '';
 
   const steps = [
     { id: 'massShot', question: "Enter mass of shot in grams:" },
@@ -78,12 +82,7 @@
 
     addMessage('user', val);
     const numVal = Number(val);
-    if (!isNaN(numVal)) {
-      data[steps[step].id] = numVal;
-    } else {
-      data[steps[step].id] = val;
-    }
-
+    data[steps[step].id] = !isNaN(numVal) ? numVal : val;
     input.value = '';
     step++;
     botAsk();
@@ -103,28 +102,40 @@
     data.gateVelocity = ((plungerArea * data.fastShotSpeed) / data.gateArea).toFixed(3);
     const pistonArea = (Math.PI * data.pistonDia * data.pistonDia) / 4;
     data.castingPressure = (data.injectionPressure * (pistonArea / plungerArea)).toFixed(3);
-
-    const fastShotSpeedCm = data.fastShotSpeed * 100; // ✅ Convert m/s to cm/s
+    const fastShotSpeedCm = data.fastShotSpeed * 100; // Convert m/s to cm/s
     data.fillTime = (volumeAheadGate / (plungerArea * fastShotSpeedCm)).toFixed(3);
-
     data.totalProjectedArea = (data.tpaPartArea + data.tpaOverflowArea + data.tpaRunnerArea).toFixed(3);
     data.clampingForce = (data.totalProjectedArea * data.castingPressure).toFixed(3);
     data.machineTonnage = (data.clampingForce * 1.1).toFixed(3);
 
-    addMessage('bot', `✅ Calculations Complete — Here are your results:
+    resultText = `
+Navan's HPDC Calculations
 
-🔹 Shot Volume: ${data.shotVolume} cm³
-🔹 First Stroke Length: ${data.firstStrokeLength} cm
-🔹 Fill Ratio: ${data.fillRatio}%
-🔹 Gate Area: ${data.gateArea} cm²
-🔹 Gate Velocity: ${data.gateVelocity} cm/s
-🔹 Casting Pressure: ${data.castingPressure} kg/cm²
-🔹 Fill Time: ${data.fillTime} s
-🔹 Total Projected Area: ${data.totalProjectedArea} cm²
-🔹 Clamping Force Required: ${data.clampingForce} kg
-🔹 Machine Tonnage Required: ${data.machineTonnage} kg
+Shot Volume: ${data.shotVolume} cm³
+First Stroke Length: ${data.firstStrokeLength} cm
+Fill Ratio: ${data.fillRatio}%
+Gate Area: ${data.gateArea} cm²
+Gate Velocity: ${data.gateVelocity} cm/s
+Casting Pressure: ${data.castingPressure} kg/cm²
+Fill Time: ${data.fillTime} s
+Total Projected Area: ${data.totalProjectedArea} cm²
+Clamping Force Required: ${data.clampingForce} kg
+Machine Tonnage Required: ${data.machineTonnage} kg
+    `.trim();
 
-✨ Thank you for using Navan's HPDC Chatbot!`);
+    addMessage('bot', resultText.replace(/\n/g, '\n\n'));
+    downloadBtn.style.display = 'inline-block';
+  }
+
+  async function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const lines = resultText.split('\n');
+    doc.setFontSize(12);
+    lines.forEach((line, index) => {
+      doc.text(line, 10, 10 + index * 8);
+    });
+    doc.save("Navans_HPDC_Calculations.pdf");
   }
 
   addMessage('bot', "👋 Welcome to Navan's HPDC Calculator Chatbot!");
@@ -132,6 +143,7 @@
 
   sendBtn.onclick = userRespond;
   input.addEventListener('keydown', e => { if (e.key === 'Enter') userRespond(); });
+  downloadBtn.onclick = downloadPDF;
 </script>
 
 </body>
